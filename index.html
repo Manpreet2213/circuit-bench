@@ -448,7 +448,7 @@ let view={s:1,ox:40,oy:40};
 let tool='select',sel=null,panelMode='auto',panelMin=false,armed=null,wireStart=null,wirePrev=null,hover=null;
 let showFlow=true,showVolt=false,soundOn=true;
 const WDEF={g:'16',c:'red'};
-const M={mode:'V',red:null,black:null,next:'red',wire:null,tl:null,clip:'gnd'};
+const M={mode:'V',red:null,black:null,next:'red',wire:null,tl:null,clip:'gnd',on:false};let PD=null;
 const LOG=[];
 let hist=[],hi=-1;
 let C={};
@@ -992,12 +992,29 @@ function draw(dt){
     else if(hover){const h=snap(hover);cx.beginPath();cx.arc(h.x,h.y,0.24,0,Math.PI*2);cx.strokeStyle=C.accent;cx.lineWidth=0.06;cx.stroke();}}
   if(armed&&hover){const h=snap(hover);const g=Object.assign({id:'ghost',t:armed.t,x:h.x,y:h.y,r:0,label:''},JSON.parse(JSON.stringify(T[armed.t].def)),armed.props||{});cx._noText=true;drawPart(cx,g,{heat:0,I:0,V:0,P:0},0.5);cx._noText=false;}
   // probes
-  if(M.tl)probe(M.tl,'#E8B21C','TL');if(M.red)probe(M.red,'#D7262B','+');if(M.black)probe(M.black,'#1E2328','−');
-  if(M.wire){const w=byId(M.wire);if(w){const m=along(wpath(w),wlen(w)/2);cx.save();cx.strokeStyle='#D9981F';cx.lineWidth=0.16;cx.beginPath();cx.ellipse(m.x,m.y,0.55,0.55,0,0.5,Math.PI*2-0.5);cx.stroke();cx.restore();}else M.wire=null;}
+  if(M.wire&&M.on&&M.mode==='A'){const w=byId(M.wire);if(w){const m=along(wpath(w),wlen(w)/2);cx.save();cx.strokeStyle='#D9981F';cx.lineWidth=0.16;cx.beginPath();cx.ellipse(m.x,m.y,0.55,0.55,0,0.5,Math.PI*2-0.5);cx.stroke();cx.restore();}else M.wire=null;}
   // particles
   for(const q of parts_){const a=Math.max(0,q.life/q.max);if(q.k==='s'){cx.save();cx.globalAlpha=Math.min(1,a*1.6);cx.strokeStyle='#FFE7A0';cx.lineWidth=0.07;ln(cx,q.x,q.y,q.x-q.vx*0.035,q.y-q.vy*0.035);cx.restore();}
     else{cx.save();cx.globalAlpha=0.32*a;cx.fillStyle='#8C8C8C';cx.beginPath();cx.arc(q.x,q.y,q.r,0,Math.PI*2);cx.fill();cx.restore();}}
 }
+function meterJacks(){const mb=$('#meter');if(!mb||mb.hidden)return null;const mr=mb.getBoundingClientRect(),cr=cv.getBoundingClientRect();const y=mr.bottom-cr.top,x0=mr.left-cr.left;
+  return{red:{x:x0+mr.width*0.28,y},black:{x:x0+mr.width*0.72,y},clamp:{x:x0+mr.width*0.5,y}};}
+const w2s=pt=>({x:view.ox+pt.x*view.s*GRID,y:view.oy+pt.y*view.s*GRID});
+const activeProbes=()=>M.mode==='A'?['clamp']:['red','black'];
+function probeScreen(wh){const j=meterJacks();if(!j)return null;if(PD&&PD.which===wh)return{x:PD.x,y:PD.y};
+  if(wh==='clamp'){const w=M.wire&&byId(M.wire);if(w)return w2s(along(wpath(w),wlen(w)/2));return{x:j.clamp.x,y:j.clamp.y+74};}
+  const pt=M[wh];if(pt)return w2s(pt);return{x:j[wh].x+(wh==='red'?-10:10),y:j[wh].y+78};}
+function drawLeads(){if(!M.on)return;const j=meterJacks();if(!j)return;cx.save();cx.setTransform(DPR,0,0,DPR,0,0);
+  for(const wh of activeProbes()){const t=probeScreen(wh),sj=j[wh];if(!t)continue;const col=wh==='red'?'#D7262B':wh==='black'?'#1E2328':'#D9981F';
+    const my=Math.max(sj.y,t.y)+55;cx.lineCap='round';cx.beginPath();cx.moveTo(sj.x,sj.y);cx.bezierCurveTo(sj.x,my,t.x,my,t.x,t.y-(wh==='clamp'?14:32));
+    cx.strokeStyle='rgba(230,236,239,.55)';cx.lineWidth=5;cx.stroke();cx.strokeStyle=col;cx.lineWidth=3.2;cx.stroke();
+    if(wh==='clamp'){cx.lineWidth=5;cx.strokeStyle='#1E2328';cx.beginPath();cx.arc(t.x,t.y,14,0.7,Math.PI*2-0.7);cx.stroke();cx.lineWidth=3;cx.strokeStyle=col;cx.stroke();}
+    else{rr(cx,t.x-6,t.y-34,12,22,4);cx.fillStyle=col;cx.fill();cx.strokeStyle='#E6ECEF';cx.lineWidth=1.5;cx.stroke();
+      cx.strokeStyle='#C9CFD3';cx.lineWidth=2.6;cx.beginPath();cx.moveTo(t.x,t.y-12);cx.lineTo(t.x,t.y);cx.stroke();
+      cx.fillStyle='#FFFFFF';cx.font='700 11px "Barlow Condensed","Arial Narrow",sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(wh==='red'?(M.mode==='TL'?'TL':'+'):(M.mode==='TL'?'CLIP':'COM'),t.x,t.y-23);
+      if(M[wh]&&!(PD&&PD.which===wh)){cx.beginPath();cx.arc(t.x,t.y,4,0,Math.PI*2);cx.fillStyle=col;cx.fill();cx.strokeStyle='#E6ECEF';cx.lineWidth=1.2;cx.stroke();}}}
+  cx.restore();}
+function probeDrop(w){const sp=snapPref(w);if(sim.idx.has(sp.x+','+sp.y)&&Math.hypot(w.x-sp.x,w.y-sp.y)<0.9)return sp;return probePoint(w);}
 function probe(pt,col,sym){cx.save();cx.beginPath();cx.arc(pt.x,pt.y-0.55,0.3,0,Math.PI*2);cx.fillStyle=col;cx.fill();cx.lineWidth=0.06;cx.strokeStyle='#E6ECEF';cx.stroke();cx.strokeStyle=col;cx.lineWidth=0.1;ln(cx,pt.x,pt.y-0.25,pt.x,pt.y);cx.restore();txt(cx,sym,pt.x,pt.y-0.56,0.5,'#FFFFFF');}
 
 /* ---------- view ---------- */
@@ -1043,6 +1060,7 @@ cv.addEventListener('pointerdown',e=>{unlockAudio();try{cv.setPointerCapture(e.p
   if(ptrs.size===2){releaseGest();const m=midOf(),r=cv.getBoundingClientRect();pinch={d:m.d,s:view.s,wx:(m.x-r.left-view.ox)/(view.s*GRID),wy:(m.y-r.top-view.oy)/(view.s*GRID)};return;}
   if(ptrs.size>2)return;
   const w=toWorld(e.clientX,e.clientY);hover=w;
+  if(M.on&&!e.button){let bw=null,bd=30;for(const wh of activeProbes()){const t=probeScreen(wh);if(!t)continue;const d=Math.hypot(w.sx-t.x,w.sy-(t.y-14));if(d<bd){bd=d;bw=wh;}}if(bw){PD={which:bw,x:w.sx,y:w.sy};gest={type:'probe',which:bw,sx:w.sx,sy:w.sy,moved:true};if(bw==='clamp')M.wire=null;else M[bw]=null;return;}}
   if(armed){gest={type:'place',sx:w.sx,sy:w.sy,moved:false};return;}
   if(e.button===1||e.button===2){gest={type:'pan',sx:w.sx,sy:w.sy,ox:view.ox,oy:view.oy,moved:true};return;}
   if(tool==='select'){
@@ -1068,6 +1086,7 @@ cv.addEventListener('pointermove',e=>{
     if(gest.type==='part'){clearTimeout(gest.lp);const r=RT(gest.p);if(gest.p.t==='button')r.pressed=false;if(gest.crank){gest.p.pos='ON';gest.crank=false;}}}
   if(!gest.moved)return;
   switch(gest.type){
+    case 'probe':if(PD){PD.x=w.sx;PD.y=w.sy;}break;
     case 'part':{if(jobLocked())break;const p=gest.p,dx=Math.round(w.x-gest.w0.x),dy=Math.round(w.y-gest.w0.y);if(p.x!==gest.x0+dx||p.y!==gest.y0+dy){p.x=gest.x0+dx;p.y=gest.y0+dy;for(const a of gest.att){if(a.e===1){a.w.x1=a.x+dx;a.w.y1=a.y+dy;}else{a.w.x2=a.x+dx;a.w.y2=a.y+dy;}}}}break;
     case 'wend':{const s=snap(w);if(gest.e===1){gest.w.x1=s.x;gest.w.y1=s.y;}else{gest.w.x2=s.x;gest.w.y2=s.y;}}break;
     case 'wdraw':wirePrev=snapPref(w);break;
@@ -1078,6 +1097,7 @@ function endPtr(e,cancel){ptrs.delete(e.pointerId);
   if(pinch){if(ptrs.size<2)pinch=null;gest=null;return;}
   if(!gest)return;const g=gest;gest=null;const w=toWorld(e.clientX,e.clientY);
   switch(g.type){
+    case 'probe':{PD=null;if(cancel)break;if(g.which==='clamp'){const wr=wireAt(w,0.7);if(wr){M.wire=wr.id;sfx('click');countTest();}}else{const pt=probeDrop(w);if(pt){M[g.which]=pt;sfx('click');countTest();}}}break;
     case 'place':if(!cancel)placeArmed(snap(w));break;
     case 'part':{clearTimeout(g.lp);const p=g.p,r=RT(p);if(p.t==='button')r.pressed=false;if(g.crank){p.pos='ON';save();}
       if(cancel)break;
@@ -1117,32 +1137,33 @@ function meterTap(w){if(M.mode==='A'){const wr=wireAt(w,0.6);if(wr){M.wire=wr.id
   if(M.mode==='TL'){M.tl=pt;sfx('click');countTest();return;}
   if(M.next==='red'){M.red=pt;M.next='black';}else{M.black=pt;M.next='red';}sfx('click');countTest();}
 function setMeterMode(m){M.mode=m;document.querySelectorAll('[data-mm]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mm===m)));syncHint();}
-function updateMeter(){const box=$('#meter');const show=tool==='meter'||M.red||M.black||M.wire||M.tl;box.hidden=!show;if(!show)return;
+function updateMeter(){const box=$('#meter');const show=M.on;box.hidden=!show;if(!show)return;
   let val='0.00',unit='V',note='',lt=0;
-  if(M.mode==='V'){if(!M.red){val='-.--';note='Tap a point for the red lead. With no black lead, it reads to ground.';}
+  if(M.mode==='V'){if(!M.red){val='-.--';note='Drag the red lead onto a connection. Leave the black lead off and it reads to ground.';}
     else{const v=ptV(M.red)-(M.black?ptV(M.black):0);val=isFinite(v)?(Math.abs(v)<0.005?0:v).toFixed(2):'-.--';note=`Red: ${describePt(M.red)} · Black: ${M.black?describePt(M.black):'chassis ground'}`;}}
   else if(M.mode==='R'){unit='Ω';const live=S.power&&S.parts.some(p=>p.t==='battery');
     if(live){val='----';note='Turn power off before reading ohms — a live circuit gives false readings.';}
-    else if(!M.red){val='-.--';note='Tap the red lead point, then the black lead point.';}
+    else if(!M.red){val='-.--';note='Drag the red and black leads onto the two points.';}
     else{const r=ohmsBetween(M.red,M.black);if(!isFinite(r)||r>2e7){val='OL';note='Open circuit — no path between the leads.';}else{const s=fR(r).split(' ');val=s[0];unit=s[1];note=`Red: ${describePt(M.red)} · Black: ${M.black?describePt(M.black):'chassis ground'}`;}}}
-  else if(M.mode==='TL'){unit='';const bp=S.parts.find(p=>p.t==='battery');const ref=M.clip==='gnd'?0:(bp?ptV(termPts(bp)[0]):0),cw=M.clip==='gnd'?'ground':'battery +';
-    if(!M.tl){val='—';note=`Clip is on ${cw}. Tap a point to touch the probe.`;}
-    else{const v=Math.abs(ptV(M.tl)-ref);lt=v/Math.max(6,vmax);val=lt>0.75?'BRIGHT':lt>0.3?'DIM':lt>0.08?'FAINT':'OFF';note=`Probe on ${describePt(M.tl)} · clip on ${cw}`;}}
-  else{unit='A';const w=M.wire?byId(M.wire):null;if(!w){val='-.--';note='Tap a wire to clamp it.';}else{const I=Math.abs(RT(w).I);val=I<10?I.toFixed(2):I<100?I.toFixed(1):I.toFixed(0);note=`Clamped on ${w.label} (${w.g} AWG, rated ${AWG[w.g].amp} A)`;}}
+  else if(M.mode==='TL'){unit='';const bp=S.parts.find(p=>p.t==='battery');const ref=M.black?ptV(M.black):M.clip==='gnd'?0:(bp?ptV(termPts(bp)[0]):0),cw=M.black?describePt(M.black):M.clip==='gnd'?'ground':'battery +';
+    if(!M.red){val='—';note=`Clip is on ${cw}. Drag the TL probe onto a connection.`;}
+    else{const v=Math.abs(ptV(M.red)-ref);lt=v/Math.max(6,vmax);val=lt>0.75?'BRIGHT':lt>0.3?'DIM':lt>0.08?'FAINT':'OFF';note=`Probe on ${describePt(M.red)} · clip on ${cw}`;}}
+  else{unit='A';const w=M.wire?byId(M.wire):null;if(!w){val='-.--';note='Drag the clamp onto a wire.';}else{const I=Math.abs(RT(w).I);val=I<10?I.toFixed(2):I<100?I.toFixed(1):I.toFixed(0);note=`Clamped on ${w.label} (${w.g} AWG, rated ${AWG[w.g].amp} A)`;}}
   $('#mVal').textContent=val;$('#mUnit').textContent=unit;$('#mNote').textContent=note;$('#lcd').style.background=M.mode==='TL'&&lt>0.08?mix('#B7C4A0','#FFD45C',Math.min(1,lt)):'';
-  const mc=$('#mClip');mc.hidden=M.mode!=='TL';mc.textContent='Clip: '+(M.clip==='gnd'?'ground':'battery +');}
+  const mc=$('#mClip');mc.hidden=M.mode!=='TL'||!!M.black;mc.textContent='Clip: '+(M.clip==='gnd'?'ground':'battery +');}
 $('#mClip').addEventListener('click',()=>{M.clip=M.clip==='gnd'?'bat':'gnd';sfx('click');});
 document.querySelectorAll('[data-mm]').forEach(b=>b.addEventListener('click',()=>setMeterMode(b.dataset.mm)));
-$('#mClear').addEventListener('click',()=>{M.red=M.black=M.wire=M.tl=null;M.next='red';if(tool==='meter')setTool('select');});
+$('#mClear').addEventListener('click',()=>{M.red=M.black=M.wire=M.tl=null;M.next='red';M.on=false;PD=null;syncToolBtns();updateMeter();syncHint();});
 
 /* ---------- tools & header ---------- */
-function setTool(t){if(jobLocked()&&(t==='wire'||t==='delete')){toast('Work orders lock the wiring. Test it with the meter.');return;}tool=t;wireStart=null;wirePrev=null;if(armed){armed=null;syncPalette();}
-  document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===t)));$('#wopts').hidden=t!=='wire';syncHint();}
+function syncToolBtns(){document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool==='meter'?M.on:b.dataset.tool===tool)));$('#wopts').hidden=tool!=='wire';}
+function setTool(t){if(t==='meter'){M.on=!M.on;PD=null;if(tool!=='select'){tool='select';wireStart=null;wirePrev=null;}if(armed){armed=null;syncPalette();}syncToolBtns();updateMeter();syncHint();return;}if(jobLocked()&&(t==='wire'||t==='delete')){toast('Work orders lock the wiring. Test it with the meter.');return;}tool=t;wireStart=null;wirePrev=null;if(armed){armed=null;syncPalette();}
+  syncToolBtns();syncHint();}
 document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
 function syncHint(){let h='';
-  if(jobLocked())h=S.job.state==='diag'?'Tap the part or wire you think is faulty':tool==='meter'?'Test the circuit: volts, voltage drop, ohms (power off), clamp or test light':'Work order: operate the circuit, then test it with the Meter';
+  if(jobLocked())h=S.job.state==='diag'?'Tap the part or wire you think is faulty':M.on?'Drag the leads onto connections and operate the circuit while the meter reads':'Work order: operate the circuit, then test it with the Meter';
   else if(armed)h=`Tap the board to place: ${armed.name}`;
-  else if(tool==='select')h='Tap a part to set it up · drag to move · tap switches to flip them';
+  else if(tool==='select')h=M.on?'Drag the meter leads onto connections · tap switches to operate while it reads':'Tap a part to set it up · drag to move · tap switches to flip them';
   else if(tool==='wire')h=wireStart?'Now tap where the wire ends (tap the start again to cancel)':'Tap a terminal, then where the wire goes — or drag between them';
   else if(tool==='meter')h=M.mode==='TL'?'Tap a point to touch the test light probe':M.mode==='A'?'Tap a wire to clamp it':M.mode==='R'?'Power off, then tap two points':'Tap red lead point, then black lead point';
   else h='Tap a part or wire to remove it';
@@ -1526,7 +1547,7 @@ function grade(k){const j=S.job,o=byId(j.pick),t=byId(j.target);if(!o||!t)return
   else{j.wrong++;j.state='open';j.msg=`${o.label} checks out. Keep testing.`;j.pick=null;}
   save();syncJob();renderPanel();}
 function giveUp(){const j=S.job,t=byId(j.target);j.state='done';j.score=0;j.gaveup=true;clearHF();tidyAfterJob();save();syncJob();renderPanel();log(`Answer: ${t?t.label:''}, ${FL[j.k].toLowerCase()}.`,'warn');}
-function syncJob(){const L=jobLocked();$('#vFlow').disabled=L;$('#vVolt').disabled=L;document.body.classList.toggle('joblock',L);if(L&&(tool==='wire'||tool==='delete')){tool='select';document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool==='select')));$('#wopts').hidden=true;}syncUndo();syncHint();}
+function syncJob(){const L=jobLocked();setTimeout(syncToolBtns,0);$('#vFlow').disabled=L;$('#vVolt').disabled=L;document.body.classList.toggle('joblock',L);if(L&&(tool==='wire'||tool==='delete')){tool='select';document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool==='select')));$('#wopts').hidden=true;}syncUndo();syncHint();}
 function jobHTML(){const j=S.job,st=jobStats(),t=byId(j.target),pk=j.pick?byId(j.pick):null;
   let b=`<p class="complaint">“${esc(j.complaint)}”</p><p class="note"><b>Start here:</b> ${esc(j.act)}</p>`;
   if(j.state==='done'){const stars=j.gaveup?0:j.score>=85?3:j.score>=60?2:1;
@@ -1537,7 +1558,7 @@ function jobHTML(){const j=S.job,st=jobStats(),t=byId(j.target),pk=j.pick?byId(j
       <div class="acts"><button type="button" class="btn" data-act="jcancel">Pick something else</button></div></div>`;}
   else if(j.state==='diag'){b+=`<p class="status warn">Tap the faulty part or wire on the board.</p><div class="acts"><button type="button" class="btn" data-act="jcancel">Back to testing</button></div>`;}
   else{b+=`${j.msg?`<p class="status">${esc(j.msg)}</p>`:''}<dl class="live"><dt>Tests made</dt><dd>${j.tests}</dd><dt>Wrong calls</dt><dd>${j.wrong}</dd></dl>
-      <ul class="howto"><li>Operate the circuit and confirm the complaint.</li><li>Use the Meter: volts, voltage drop, ohms with power off, amp clamp, or the test light.</li><li>Fuse keeps blowing? Tap it and put a test light in its place, then unplug connectors until the light goes out.</li><li>Comes and goes? Tap wires and connectors to wiggle them while you watch the meter.</li><li>When you know, tap <b>I found it</b> and point at the part or wire.</li></ul>
+      <ul class="howto"><li>Operate the circuit and confirm the complaint.</li><li>Tap <b>Meter</b>, then drag its red and black leads onto connections. You can keep operating switches while it reads.</li><li>Fuse keeps blowing? Tap it and put a test light in its place, then unplug connectors until the light goes out.</li><li>Comes and goes? Tap wires and connectors to wiggle them while you watch the meter.</li><li>When you know, tap <b>I found it</b> and point at the part or wire.</li></ul>
       <div class="acts"><button type="button" class="btn primary" data-act="jfound">I found it</button><button type="button" class="btn" data-act="jgive">Show answer</button><button type="button" class="btn danger" data-act="jquit">Quit</button></div>`;}
   const minB=closeB.replace(/<button[^>]*data-act="close"[\s\S]*$/,'');
   return `<div class="phead"><div class="ttl"><span class="tag">Work order · ${esc(j.name)}</span><h2>${j.state==='done'?'Job closed':'Find the fault'}</h2></div><span class="livesum">${j.state==='done'?'':j.tests+' tests'}</span>${minB}</div><div class="pbody">${b}${st.n?`<p class="note">Jobs done: ${st.n} · average score ${Math.round(st.sum/st.n)}</p>`:''}</div>`;}
@@ -1694,7 +1715,7 @@ $('#v3body').addEventListener('click',e=>{if(!T3.ready)return;T3.truck.visible=!
 /* ---------- loop ---------- */
 let last=performance.now(),liveT=0;
 function frame(t){const dt=Math.min(0.05,Math.max(0.001,(t-last)/1000));last=t;
-  try{stepInt(dt);solve();heatTick(dt);stepParticles(dt);draw(dt);}catch(err){console.error(err);}
+  try{stepInt(dt);solve();heatTick(dt);stepParticles(dt);draw(dt);drawLeads();}catch(err){console.error(err);}
   liveT+=dt;if(liveT>0.15){liveT=0;updateLive();updateMeter();}
   requestAnimationFrame(frame);}
 
