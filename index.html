@@ -101,6 +101,9 @@ h1,h2,h3{font-family:var(--f-display);font-weight:700;margin:0;letter-spacing:.0
 .stars{color:var(--accent);font-size:1.1rem;letter-spacing:.1em}
 .jobcta{display:flex;flex-direction:column;gap:6px;background:var(--bg);border-radius:10px;padding:10px 12px}
 .jobcta p{margin:0;font-size:.86rem;color:var(--muted)}
+.tasks{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:10px;font-size:.9rem}.tasks li.ok::marker{color:var(--ok)}.tasks .lok{color:var(--muted);font-size:.84rem}
+.tasks li{display:flex;flex-direction:column;gap:2px}.tasks .rd{font-family:var(--f-lcd);font-size:.82rem;color:var(--ink)}
+.phead .cust{margin:2px 0 0;font-size:.98rem;line-height:1.35}
 body.joblock .palette{opacity:.4;pointer-events:none}
 body.joblock [data-tool="wire"],body.joblock [data-tool="delete"]{opacity:.35}
 .chip[disabled]{opacity:.4}
@@ -354,7 +357,7 @@ const T={
 const fuseR=a=>0.08/a, rheoR=p=>Math.max(0.05,p.max*p.pct/100);
 const coilR=p=>p.coil*p.coil/1.8;
 const lampR=p=>p.vr*p.vr/p.w;
-T.fuse.els=(p,n)=>[{a:n[0],b:n[1],g:p.tlf?1/6.8:p.blown?OFF:1/fuseR(p.a),k:'m'}];
+T.fuse.els=(p,n)=>[{a:n[0],b:n[1],g:p.tlf?1/6.8:(p.blown||p.pulled)?OFF:1/fuseR(p.a),k:'m'}];
 T.breaker.els=(p,n)=>[{a:n[0],b:n[1],g:p.tlf?1/6.8:p.tripped?OFF:1/(0.06/p.a),k:'m'}];
 T.switch.els=(p,n)=>[{a:n[0],b:n[1],g:p.on&&!p.dmg?G_ON:OFF,k:'m'}];
 T.button.els=(p,n,rt)=>[{a:n[0],b:n[1],g:rt.pressed&&!p.dmg?G_ON:OFF,k:'m'}];
@@ -538,7 +541,7 @@ function heatTick(dt){
     if(r.heat>=1){p.dmg=true;damage(p,`${what} ${p.label} contacts burned open — ${fA(I)} through ${rate} A contacts.`,'burn');}};
   for(const p of S.parts){const r=RT(p),I=Math.abs(r.I);
     switch(p.t){
-      case 'fuse':if(p.blown||p.tlf)break;{const q=I/p.a;r.heat=hb(r.heat,q>1?(q*q-1)/3:-0.6,dt);
+      case 'fuse':if(p.blown||p.tlf||p.pulled)break;{const q=I/p.a;r.heat=hb(r.heat,q>1?(q*q-1)/3:-0.6,dt);
         if(q>1)mark(p,r.heat,`${p.label}: ${fA(I)} through a ${p.a} A fuse`);
         if(r.heat>=1){p.blown=true;damage(p,`Fuse ${p.label} blew — ${fA(I)} through a ${p.a} A fuse.`,'pop');}}break;
       case 'breaker':if(p.tripped||p.tlf)break;{const q=I/p.a;r.heat=hb(r.heat,q>1?(q*q-1)/5:-0.6,dt);
@@ -927,7 +930,7 @@ const Rv={
  mod(c,p){rlead(c,-2,0,-1.0,0);rlead(c,1.0,0,2,0);body(c,-1.0,-0.75,2.0,1.5,0.14,'#AEB6BB');body(c,-1.0,-0.28,0.34,0.56,0.05,'#1E2124');rr(c,-0.5,-0.45,1.35,0.9,0.08);c.fillStyle='#E6ECEF';c.fill();txt(c,p.kind==='input'?'INPUT':'MODULE',0.17,0,0.22,'#17212A');}
 };
 function hex2c(s){if(s.startsWith('#'))return s;const m=s.match(/\d+/g);if(!m)return '#000000';return '#'+m.slice(0,3).map(v=>(+v).toString(16).padStart(2,'0')).join('');}
-const VALF={drv:p=>p.on?'ON':'OFF',rcoil:()=>'COIL',rcont:p=>p.nc?'N.C.':'N.O.',mod:p=>p.kind==='input'?'INPUT':null,cpin:()=>null,pswitch:p=>p.act?'APPLIED':'AT REST',alt:p=>p.run?'RUNNING':'STOPPED',ecu:()=>null,ammeter:(p,r)=>p.dmg?null:fA(r.I),led:p=>LEDC[p.color].n,horn:p=>p.a+' A',switch:p=>p.on?'ON':'OFF',spdt:p=>'→ '+p.pos,lamp:p=>p.w+' W',button:(p,r)=>r.pressed?'PRESSED':null};
+const VALF={fuse:p=>p.pulled?'PULLED':p.a+' A',drv:p=>p.on?'ON':'OFF',rcoil:()=>'COIL',rcont:p=>p.nc?'N.C.':'N.O.',mod:p=>p.kind==='input'?'INPUT':null,cpin:()=>null,pswitch:p=>p.act?'APPLIED':'AT REST',alt:p=>p.run?'RUNNING':'STOPPED',ecu:()=>null,ammeter:(p,r)=>p.dmg?null:fA(r.I),led:p=>LEDC[p.color].n,horn:p=>p.a+' A',switch:p=>p.on?'ON':'OFF',spdt:p=>'→ '+p.pos,lamp:p=>p.w+' W',button:(p,r)=>r.pressed?'PRESSED':null};
 function drawPart(c,p,r,alpha){
   c.save();c.translate(p.x,p.y);c.rotate((p.r&3)*Math.PI/2);if(alpha!=null)c.globalAlpha=alpha;
   c.lineWidth=0.09;c.lineCap='round';c.lineJoin='round';c.strokeStyle=C.ink;c.fillStyle=C.sym;
@@ -1161,7 +1164,8 @@ function setTool(t){if(t==='meter'){M.on=!M.on;PD=null;if(tool!=='select'){tool=
   syncToolBtns();syncHint();}
 document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
 function syncHint(){let h='';
-  if(jobLocked())h=S.job.state==='diag'?'Tap the part or wire you think is faulty':M.on?'Drag the leads onto connections and operate the circuit while the meter reads':'Work order: operate the circuit, then test it with the Meter';
+  if(S.lesson&&!jobLocked())h='Follow the lesson. Drag the meter leads where it says';
+  else if(jobLocked())h=S.job.state==='diag'?'Tap the part or wire you think is faulty':M.on?'Drag the leads onto connections and operate the circuit while the meter reads':'Work order: operate the circuit, then test it with the Meter';
   else if(armed)h=`Tap the board to place: ${armed.name}`;
   else if(tool==='select')h=M.on?'Drag the meter leads onto connections · tap switches to operate while it reads':'Tap a part to set it up · drag to move · tap switches to flip them';
   else if(tool==='wire')h=wireStart?'Now tap where the wire ends (tap the start again to cancel)':'Tap a terminal, then where the wire goes — or drag between them';
@@ -1230,7 +1234,7 @@ const F={
 const AMPS=[1,2,3,5,7.5,10,15,20,25,30,40];
 function fields(p){switch(p.t){
   case 'battery':return F.num('v','Voltage',p.v,0.1,1,48,'V')+F.num('ri','Internal resistance',p.ri,0.001,0.001,1,'Ω');
-  case 'fuse':return F.sel('a','Rating',p.a,AMPS.map(a=>[a,a+' A']));
+  case 'fuse':return F.sel('a','Rating',p.a,AMPS.map(a=>[a,a+' A']))+F.seg('pulled','In the holder',String(!!p.pulled),[['false','In'],['true','Pulled']]);
   case 'breaker':return F.sel('a','Rating',p.a,[5,10,15,20,25,30,40,50].map(a=>[a,a+' A']));
   case 'switch':return F.seg('on','Position',p.on,[[false,'Off'],[true,'On']])+F.sel('rate','Contact rating',p.rate,[10,15,20,30,40].map(a=>[a,a+' A']));
   case 'button':return F.sel('rate','Contact rating',p.rate,[5,10,15,20].map(a=>[a,a+' A']));
@@ -1284,7 +1288,7 @@ function wireHTML(w){const a=AWG[w.g],L=wlen(w)*CELL_M,R=a.r*Math.max(1,wlen(w))
   <div class="acts">${w.burnt?'<button type="button" class="btn primary" data-act="replace">Replace wire</button>':''}<button type="button" class="btn danger" data-act="del">Delete</button></div></div>`;}
 function logHTML(){const items=LOG.slice(-60).reverse();
   return `<div class="phead"><div class="ttl"><span class="tag">Bench</span><h2>Event log</h2></div><button type="button" class="pbtn pclose mobonly" data-act="close" aria-label="Close">×</button></div>
-  <div class="pbody"><div class="jobcta"><b>Practice like a tech</b><p>Get a customer complaint with a hidden fault. Find it with the meter and test light.</p><div class="acts"><button type="button" class="btn primary" data-act="jstart">Start a work order</button></div></div><ol class="loglist">${items.length?items.map(l=>`<li class="${l.k}"><time>${l.t}</time>${esc(l.m)}</li>`).join(''):'<li>Nothing has failed yet. Try “Wrong fuse, wire fire” from Circuits.</li>'}</ol>
+  <div class="pbody"><div class="jobcta"><b>Practice like a tech</b><p>Get a customer complaint with a hidden fault. Find it with the meter and test light.</p><div class="acts"><button type="button" class="btn primary" data-act="jstart">Start a work order</button><button type="button" class="btn" data-act="school">Meter school</button></div></div><ol class="loglist">${items.length?items.map(l=>`<li class="${l.k}"><time>${l.t}</time>${esc(l.m)}</li>`).join(''):'<li>Nothing has failed yet. Try “Wrong fuse, wire fire” from Circuits.</li>'}</ol>
   <div class="sect"><h3>How the bench works</h3><ul class="howto">
    <li>Pick a part from the bin and tap the board to drop it, or drag it on.</li>
    <li>Wire tool: tap a terminal, then tap where the wire goes. Hollow rings are open terminals.</li>
@@ -1294,7 +1298,8 @@ function logHTML(){const items=LOG.slice(-60).reverse();
    <li>Pinch or scroll to zoom. Drag empty board to pan. R rotates, Delete removes, Ctrl+Z undoes.</li></ul></div></div>`;}
 function fileHTML(){let js='';try{js=JSON.stringify(S);}catch(e){}
   return `<div class="phead"><div class="ttl"><span class="tag">Bench</span><h2>Circuits</h2></div><button type="button" class="pbtn pclose" data-act="close" aria-label="Close">×</button></div>
-  <div class="pbody"><div class="sect"><h3>Work orders</h3><p class="note">A customer complaint with a hidden fault: an open wire, a corroded ground, a bad relay. The wiring is locked and live readings are hidden, so you find it with the meter and test light like on a real truck. Fewer tests means a higher score.</p><div class="acts"><button type="button" class="btn primary" data-act="jstart">Start a work order</button></div></div>
+  <div class="pbody"><div class="sect"><h3>Meter school</h3><p class="note">Short hands-on lessons for every meter test a tech uses: battery voltage, voltage to ground, voltage drop, ohms, amp clamp, parasitic draw, test light and relays.</p><div class="acts"><button type="button" class="btn primary" data-act="school">Open Meter school</button></div></div>
+  <div class="sect"><h3>Work orders</h3><p class="note">A customer complaint with a hidden fault: an open wire, a corroded ground, a bad relay. The wiring is locked and live readings are hidden, so you find it with the meter and test light like on a real truck. Fewer tests means a higher score.</p><div class="acts"><button type="button" class="btn primary" data-act="jstart">Start a work order</button></div></div>
   <div class="sect"><h3>Volvo PC04 sheets</h3><p class="note">All ${SHEETS.length} sheets of the Volvo PC04 schematic laid out as live circuits. Fuses, connector pins, splices, relays and modules carry their names from the drawing. The layout is generated, so it reads top to bottom (power to ground) instead of matching the printed page.</p>
   <label class="f"><span>Sheet</span><select id="sheetPick">${SHEETS.map(sh=>`<option value="${sh.id}"${S.sheet===sh.id?' selected':''}>${sh.id} · p.${sh.pg} · ${esc(sh.t)}</option>`).join('')}</select></label>
   <div class="acts"><button type="button" class="btn primary" data-act="sheet">Open sheet</button><button type="button" class="btn" data-act="sjob">Work order on this sheet</button><button type="button" class="btn" data-act="rsjob">Random sheet work order</button></div></div>
@@ -1303,8 +1308,8 @@ function fileHTML(){let js='';try{js=JSON.stringify(S);}catch(e){}
   <div class="sect"><h3>Save a copy</h3><p class="note">Your board saves itself in this browser. To keep it elsewhere, copy this text into a note.</p><textarea id="exportTxt" readonly>${esc(js)}</textarea><div class="acts"><button type="button" class="btn" data-act="copy">Copy circuit</button></div></div>
   <div class="sect"><h3>Open a copy</h3><textarea id="importTxt" placeholder="Paste circuit text here"></textarea><div class="acts"><button type="button" class="btn primary" data-act="import">Open circuit</button></div></div></div>`;}
 function renderPanel(){const o=selObj();let html;
-  if(o)html=jobLocked()?jobPartHTML(o):o.t?partHTML(o):wireHTML(o);else if(panelMode==='file')html=fileHTML();else if(S.job&&panelMode!=='log')html=jobHTML();else html=logHTML();
-  panel.innerHTML=html;const open=isDesk()||!!o||panelMode!=='auto'||!!S.job;panel.classList.toggle('open',open);panel.classList.toggle('min',(!!o||!!S.job)&&panelMin&&!isDesk());
+  if(o)html=jobLocked()?jobPartHTML(o):o.t?partHTML(o):wireHTML(o);else if(panelMode==='file')html=fileHTML();else if(panelMode==='school')html=schoolHTML();else if(S.job&&panelMode!=='log')html=jobHTML();else if(S.lesson&&panelMode!=='log')html=lessonHTML();else html=logHTML();
+  panel.innerHTML=html;const open=isDesk()||!!o||panelMode!=='auto'||!!S.job||!!S.lesson;panel.classList.toggle('open',open);panel.classList.toggle('min',(!!o||!!S.job||!!S.lesson)&&panelMin&&!isDesk());
   updateLive();}
 function liveRows(o){const r=RT(o),rows=[];
   if(!o.t){const a=AWG[o.g],I=Math.abs(r.I),dv=Math.abs(ptV({x:o.x1,y:o.y1})-ptV({x:o.x2,y:o.y2}));
@@ -1336,7 +1341,7 @@ function updateLive(){const o=selObj();if(!o||jobLocked())return;const l=$('#liv
 function setProp(k,v,live){const o=selObj();if(!o)return false;
   if(jobLocked()&&!['on','pos','act','run','tc','pct','unplug','tlf'].includes(k))return false;
   if(k==='label'){v=String(v).trim().slice(0,12);if(!v)return false;o.label=v;return true;}
-  if(k==='on'||k==='nc'||k==='act'||k==='run'||k==='led'||k==='unplug'||k==='tlf')v=v===true||v==='true';
+  if(k==='on'||k==='nc'||k==='act'||k==='run'||k==='led'||k==='unplug'||k==='tlf'||k==='pulled')v=v===true||v==='true';
   else if(NUMK.has(k)){v=parseFloat(v);if(!isFinite(v))return false;
     const lim={ohms:[0.01,1e7],tc:[-40,150],pos:[0,100],v:[0.5,60],ri:[0.001,2],rw:[0.01,10000],ohm:[0.1,1e7],max:[1,1e5],pct:[0,100],a:[0.1,200]}[k];if(lim)v=clamp(v,lim[0],lim[1]);}
   if(!o.t){if(k==='g'&&AWG[v])o.g=v;else if(k==='c'&&WCOL[v])o.c=v;else if(k==='bend')o.bend=v==='v'?'v':'h';return true;}
@@ -1357,6 +1362,13 @@ panel.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)retu
     case 'replace':if(o){o.blown=false;o.dmg=false;o.tripped=false;if(!o.t)o.burnt=false;RT(o).heat=0;RT(o).smk=false;commit();log(`Replaced ${o.label}.`,'ok');renderPanel();}break;
     case 'ex':loadExample(b.dataset.id);break;
     case 'jstart':case 'jnext':startJob();break;
+    case 'school':sel=null;panelMode='school';panelMin=false;renderPanel();break;
+    case 'lstart':startLesson(b.dataset.id);break;
+    case 'lq':answerQ(+b.dataset.k);break;
+    case 'lrestart':startLesson(S.lesson.id);break;
+    case 'lskip':skipStep();break;
+    case 'lquit':quitLesson();break;
+    case 'lnext':{const i=LES.findIndex(l=>l.id===S.lesson.id);quitLesson();if(i>=0&&LES[i+1])startLesson(LES[i+1].id);else{panelMode='school';renderPanel();}}break;
     case 'sheet':{const v=$('#sheetPick').value;loadSheet(v);}break;
     case 'sjob':{const v=$('#sheetPick').value;startSheetJob(v);}break;
     case 'rsjob':{let ok=false;for(let i=0;i<6&&!ok;i++)ok=startSheetJob(null);}break;
@@ -1457,7 +1469,7 @@ function beginSheetJob(sh,o,k,comp,act){setTimeout(()=>{if(T3.on)rebuild3D();},0
   commit();fit();syncJob();syncSheetBar();renderPanel();log(`New work order on sheet ${sh.id}: ${S.job.complaint}`,'warn');return true;}
 function setHF(o,h){if(o.t==='ground'){for(const g of S.parts)if(g.t==='ground'&&g.label===o.label)g.hf=h;}else o.hf=h;}
 function loadName(p){return (p.desc||p.label).replace(/\s*\((?:sheet|trainer)[^)]*\)/gi,'').replace(/\s+/g,' ').trim();}
-function startSheetJob(id){const sh=SHEETS.find(x=>x.id===id)||SHEETS[Math.floor(Math.random()*SHEETS.length)];
+function startSheetJob(id){if(S.lesson)quitLesson(true);const sh=SHEETS.find(x=>x.id===id)||SHEETS[Math.floor(Math.random()*SHEETS.length)];
   buildSheet(sh);const base=powerMap();
   const okT=new Set(['cpin','switch','drv','rcont','rcoil','lamp','motor','horn','solenoid','heater','ground']);
   const cands=[...S.wires.filter(w=>w.col!=null&&w.label!=='jumper'&&!/bus$/.test(w.label)),...S.parts.filter(p=>okT.has(p.t)||(p.t==='mod'&&p.kind==='load'))];
@@ -1530,7 +1542,7 @@ const EXPL={open:'An open stops all current. Voltage is there up to the break an
 function jobLocked(){return !!(S.job&&S.job.state!=='done');}
 function jobStats(){try{return JSON.parse(localStorage.getItem(KEY+':jobs')||'null')||{n:0,sum:0};}catch(e){return{n:0,sum:0};}}
 function jobScore(j){return Math.max(5,100-3*Math.max(0,j.tests-8)-15*j.wrong);}
-function startJob(){const J=JOBS[Math.floor(Math.random()*JOBS.length)],sc=J.list[Math.floor(Math.random()*J.list.length)];
+function startJob(){if(S.lesson)quitLesson(true);const J=JOBS[Math.floor(Math.random()*JOBS.length)],sc=J.list[Math.floor(Math.random()*J.list.length)];
   loadExample(J.ex,true);const o=S.parts.find(p=>p.label===sc[0])||S.wires.find(w=>w.label===sc[0]);if(!o){toast('Could not set up that job.');return;}
   INT[o.id]=null;o.hf={k:sc[1],r:sc[3]||0};S.job={name:J.name,act:sc[4]||J.act,complaint:sc[2],target:o.id,k:sc[1],tests:0,wrong:0,state:'open',pick:null,msg:''};
   M.red=M.black=M.wire=M.tl=null;M.next='red';sel=null;panelMode='auto';panelMin=false;if(tool!=='select'&&tool!=='meter')setTool('select');
@@ -1712,11 +1724,103 @@ $('#sh3d').addEventListener('click',open3D);$('#v3close').addEventListener('clic
 $('#v3reset').addEventListener('click',()=>{if(T3.ready)T3.ctl.reset();});
 $('#v3body').addEventListener('click',e=>{if(!T3.ready)return;T3.truck.visible=!T3.truck.visible;e.currentTarget.setAttribute('aria-pressed',String(T3.truck.visible));});
 
+
+/* ---------- Meter school ---------- */
+const LP=(lab,term)=>{const p=S.parts.find(q=>q.label===lab);if(!p)return null;const t=termPts(p).find(q=>q.n===term);return t?{x:t.x,y:t.y}:null;};
+const WE=lab=>{const w=S.wires.find(q=>q.label===lab);return w?[{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}]:[null,null];};
+const PT=lab=>S.parts.find(q=>q.label===lab)||{};const WB=lab=>S.wires.find(q=>q.label===lab)||{};
+const onP=(a,b)=>!!(a&&b&&a.x===b.x&&a.y===b.y);
+function gndPts(){const g=[];for(const p of S.parts){if(p.t==='ground')g.push(...termPts(p));if(p.t==='battery'){const t=termPts(p).find(q=>q.n==='-');if(t)g.push(t);}}
+  for(const w of S.wires){const a={x:w.x1,y:w.y1},b={x:w.x2,y:w.y2};if(g.some(q=>onP(q,a)))g.push(b);else if(g.some(q=>onP(q,b)))g.push(a);}return g;}
+const isGnd=pt=>!pt||gndPts().some(q=>onP(q,pt));
+const mm=m=>M.on&&M.mode===m;
+const red=pt=>M.on&&onP(M.red,pt);
+const leads=(r,b)=>M.on&&onP(M.red,r)&&(b==='gnd'?isGnd(M.black):onP(M.black,b));
+const across=(a,b)=>M.on&&((onP(M.red,a)&&onP(M.black,b))||(onP(M.red,b)&&onP(M.black,a)));
+const plant=(lab,h)=>{const o=S.parts.find(q=>q.label===lab)||S.wires.find(q=>q.label===lab);if(o)o.hf=h;};
+const LES=[
+ {id:'batt',name:'Battery voltage',sub:'At rest and while cranking',ex:'starter',steps:[
+  {t:'Tap <b>Meter</b> to turn it on and set it to <b>DC V</b>.',chk:()=>mm('V'),ok:'DC V measures push, in volts, between the red and black leads.'},
+  {t:'Drag the <b>red lead</b> onto the battery <b>+</b> post of BAT1 and the <b>black lead</b> onto its <b>−</b> post.',chk:()=>mm('V')&&leads(LP('BAT1','+'),LP('BAT1','-')),ok:'A fully charged 12 V battery rests at about 12.6 V. About 12.4 V is 75 %, 12.2 V is half, and under 12.0 V it is flat. Read it at rest, with nothing running.'},
+  {t:'Leave the leads on. Tap <b>KEY1</b> twice to reach ON, then <b>press and hold KEY1</b> to crank while you watch the meter.',chk:()=>mm('V')&&leads(LP('BAT1','+'),LP('BAT1','-'))&&PT('KEY1').pos==='START',ok:'While cranking, a good battery stays above about 9.6 V. If it drops lower, charge and load test it before you blame the starter.'},
+  {t:'Starter cable voltage drop: put the red lead on <b>BAT1 +</b> and the black lead on the <b>STARTER</b> terminal that comes from the solenoid. Then crank again.',chk:()=>mm('V')&&leads(LP('BAT1','+'),LP('STARTER','out'))&&PT('KEY1').pos==='START',ok:'This is the loss in the positive cable and solenoid contacts at full current. Under about 0.5 V is good. More means a bad cable, a loose lug or burnt solenoid contacts, and the engine cranks slow.'}]},
+ {id:'volts',name:'Voltage to ground',sub:'Walk a circuit to find an open',ex:'headlight',steps:[
+  {t:'Turn the <b>Meter</b> on and set it to <b>DC V</b>.',chk:()=>mm('V'),ok:'Ready.'},
+  {t:'Put the <b>black lead</b> on ground (a ground symbol or BAT1 −) and leave it there. Put the <b>red lead</b> on the output of fuse <b>F1</b>.',chk:()=>mm('V')&&leads(LP('F1','out'),'gnd'),ok:'About 12.6 V: power made it through the fuse.'},
+  {t:'Make sure <b>S1</b> is ON, then move the red lead to the lamp input, <b>L1 in</b>.',chk:()=>mm('V')&&PT('S1').on&&leads(LP('L1','in'),'gnd'),ok:'A little less than at the fuse. The wire and switch use a small amount of the push.'},
+  {t:'Now move the red lead to the lamp output, <b>L1 out</b>.',chk:()=>mm('V')&&PT('S1').on&&leads(LP('L1','out'),'gnd'),ok:'Almost 0 V. The lamp used up the push, so its ground side reads near zero. Battery voltage here would mean an open ground.'},
+  {enter:()=>plant('W4',{k:'open'}),t:'I just broke something and the lamp is out. Walk the red lead from <b>F1 out</b> toward the lamp, and stop on <b>L1 in</b>.',chk:()=>mm('V')&&leads(LP('L1','in'),'gnd'),ok:'Voltage at S1 out, but 0 V at L1 in.'},
+  {t:'Where is the open?',q:['Fuse F1','Wire W3, between F1 and S1','Wire W4, between S1 and L1','Lamp L1'],a:2,ok:'Power reaches S1 out but not L1 in, so the break is in the wire between them. That is how you walk a circuit to find an open.'}]},
+ {id:'vdpos',name:'Voltage drop: power side',sub:'Find corrosion with the circuit on',ex:'headlight',steps:[
+  {t:'Turn the <b>Meter</b> on, set to <b>DC V</b>, and make sure <b>S1</b> is ON.',chk:()=>mm('V')&&PT('S1').on,ok:'A voltage drop test only works with current flowing, so the circuit must be on.'},
+  {t:'Put the <b>red lead on BAT1 +</b> and the <b>black lead on L1 in</b>.',chk:()=>mm('V')&&PT('S1').on&&leads(LP('BAT1','+'),LP('L1','in')),ok:'This shows all the voltage lost between the battery and the lamp. On a good circuit it is under about 0.5 V.'},
+  {enter:()=>plant('W3',{k:'hr',r:0.6}),t:'I added corrosion somewhere on the power side and the lamp went dim. Read the same two points again.',chk:()=>mm('V')&&PT('S1').on&&leads(LP('BAT1','+'),LP('L1','in')),ok:'Much more is lost before the lamp now. That missing push is why it is dim.'},
+  {t:'Narrow it down. Measure across one piece at a time (fuse, each wire, switch). Stop with the leads on <b>both ends of the piece with the big drop</b>.',chk:()=>mm('V')&&PT('S1').on&&across(...WE('W3')),ok:'The drop is across W3. A good wire drops close to 0 V, so the corrosion is in W3 or its terminals. Splitting the circuit this way is faster than taking it apart.'}]},
+ {id:'vdgnd',name:'Voltage drop: ground side',sub:'Bad grounds hide here',ex:'headlight',steps:[
+  {t:'Turn the <b>Meter</b> on, set to <b>DC V</b>, and make sure <b>S1</b> is ON.',chk:()=>mm('V')&&PT('S1').on,ok:'Grounds carry the full load current back to the battery, so they get the same test.'},
+  {t:'Put the <b>red lead on L1 out</b> and the <b>black lead right on BAT1 −</b>.',chk:()=>mm('V')&&PT('S1').on&&leads(LP('L1','out'),LP('BAT1','-')),ok:'This is the whole ground path. It should be under about 0.2 V.'},
+  {enter:()=>plant('W5',{k:'hr',r:0.6}),t:'I loosened a ground. Read the same two points again.',chk:()=>mm('V')&&PT('S1').on&&leads(LP('L1','out'),LP('BAT1','-')),ok:'Lots of voltage is now lost on the way back. The lamp is dim, and its ground side no longer reads near 0 V.'},
+  {t:'Find it: put the leads on <b>both ends of the piece with the drop</b>.',chk:()=>mm('V')&&PT('S1').on&&across(...WE('W5')),ok:'W5 and its ground connection. On a truck, clean and tighten the ground stud, then test again with the circuit on.'}]},
+ {id:'ohms',name:'Ohms and continuity',sub:'Power off, then check wires and parts',ex:'headlight',steps:[
+  {t:'Tap the <b>Power</b> button at the top to disconnect the battery. Never read ohms on a live circuit.',chk:()=>!S.power,ok:'Battery disconnected.'},
+  {t:'Turn the <b>Meter</b> on and set it to <b>Ω</b>.',chk:()=>mm('R')&&!S.power,ok:'In Ω mode the meter sends its own tiny current through whatever is between the leads.'},
+  {t:'Check wire <b>W4</b> end to end: one lead on each end.',chk:()=>mm('R')&&!S.power&&across(...WE('W4')),ok:'Near 0 Ω means the wire is continuous. A good wire reads well under 1 Ω.'},
+  {t:'Measure the lamp: leads on <b>L1 in</b> and <b>L1 out</b>.',chk:()=>mm('R')&&!S.power&&across(LP('L1','in'),LP('L1','out')),ok:'A few ohms through the filament. A burned-out bulb reads OL.'},
+  {enter:()=>plant('W4',{k:'open'}),t:'I broke W4 inside its insulation. Check it end to end again.',chk:()=>mm('R')&&!S.power&&across(...WE('W4')),ok:'OL means open: no path at all. A wire can look fine outside and still read OL.'},
+  {t:'Why must the power be off for an ohms test?',q:['Circuit voltage mixes with the meter\'s own test current and gives a false reading','Ohms only work on 24 V trucks','It makes the reading faster'],a:0,ok:'Right. And with power off, also isolate the part (unplug it) so other paths don\'t add to the reading.'}]},
+ {id:'amps',name:'Amp clamp',sub:'Current draw without opening the circuit',ex:'headlight',steps:[
+  {t:'Turn the <b>Meter</b> on and set it to <b>Amps</b>.',chk:()=>mm('A'),ok:'The clamp reads the magnetic field around a wire, so you never cut or unplug anything.'},
+  {t:'Turn <b>S1</b> ON and drag the <b>clamp</b> onto wire <b>W4</b>, the one feeding the lamp.',chk:()=>mm('A')&&PT('S1').on&&M.wire===WB('W4').id,ok:'About 4.7 A. Check it against the bulb: 55 W ÷ 12 V ≈ 4.6 A, a little more at 12.6 V. Much more means a short or a stuck motor; much less means high resistance.'},
+  {t:'Turn <b>S1</b> OFF and watch the clamp.',chk:()=>mm('A')&&!PT('S1').on&&M.wire===WB('W4').id,ok:'It drops to 0 A. Most truck loads would blow a meter\'s 10 A fuse, which is why techs reach for a clamp.'}]},
+ {id:'para',name:'Parasitic draw',sub:'What is draining the batteries overnight',ex:'ecu',steps:[
+  {t:'Turn the <b>Meter</b> on and set it to <b>Amps</b>. The door is closed and the truck is parked.',chk:()=>mm('A')&&!PT('DOOR').act,ok:'Ready.'},
+  {t:'Clamp the battery feed wire <b>W2</b>.',chk:()=>mm('A')&&M.wire===WB('W2').id&&!PT('DOOR').act,ok:'About 210 mA with everything off. A parked truck should draw only a few dozen milliamps, so something is staying awake.'},
+  {t:'Find the circuit: tap fuse <b>F1</b>, set it to <b>Pulled</b>, and watch the clamp.',chk:()=>mm('A')&&M.wire===WB('W2').id&&PT('F1').pulled,ok:'The draw went to 0, so the drain is on F1\'s circuit. On a truck you pull fuses one at a time until the draw drops. Give the modules several minutes to go to sleep before you start.'}]},
+ {id:'tl',name:'Test light',sub:'Quick power and ground checks',ex:'headlight',steps:[
+  {t:'Turn the <b>Meter</b> on and choose <b>Light</b>. The clip starts on ground.',chk:()=>mm('TL')&&M.clip==='gnd'&&!M.black,ok:'A test light is a bulb between the probe and the clip. It lights when there is a voltage difference that can push real current.'},
+  {t:'Turn <b>S1</b> ON and touch the probe (red lead) to <b>L1 in</b>.',chk:()=>mm('TL')&&PT('S1').on&&red(LP('L1','in'))&&M.clip==='gnd'&&!M.black,ok:'Bright: there is power there.'},
+  {t:'Now touch <b>L1 out</b>.',chk:()=>mm('TL')&&red(LP('L1','out'))&&M.clip==='gnd'&&!M.black,ok:'Off: that point is at ground, as it should be.'},
+  {t:'Tap the <b>Clip</b> button on the meter to move the clip to <b>battery +</b>, then touch <b>L1 out</b> again.',chk:()=>mm('TL')&&red(LP('L1','out'))&&M.clip==='bat'&&!M.black,ok:'Bright now. With the clip on battery +, a lit test light proves a good ground. A test light draws real current (1 to 2 A), so it can show a weak connection a meter misses. Never probe module or sensor circuits with one: that current can damage a module.'}]},
+ {id:'relay',name:'Testing a relay',sub:'Coil, signal, contacts',ex:'horn',steps:[
+  {t:'Tap <b>Power</b> at the top to disconnect the battery, then set the <b>Meter</b> to <b>Ω</b>.',chk:()=>mm('R')&&!S.power,ok:'Ready to measure the coil.'},
+  {t:'Measure the coil: leads on <b>K1 pin 86</b> and <b>K1 pin 85</b>.',chk:()=>mm('R')&&!S.power&&across(LP('K1','86'),LP('K1','85')),ok:'About 80 Ω is a good 12 V coil. OL is an open coil; near 0 Ω is a shorted coil that can blow its fuse.'},
+  {t:'Reconnect <b>Power</b>, set the meter to <b>DC V</b>, black lead on ground and red lead on <b>K1 pin 30</b>.',chk:()=>mm('V')&&S.power&&leads(LP('K1','30'),'gnd'),ok:'Battery voltage on 30: the relay has its power feed.'},
+  {t:'Move the red lead to <b>pin 86</b>, then <b>press and hold the HORN button</b>.',chk:()=>mm('V')&&S.power&&leads(LP('K1','86'),'gnd')&&RT(PT('HORN')).pressed,ok:'Voltage on 86 only while you press: the button sends the signal. Pin 85 is the coil\'s ground.'},
+  {t:'Move the red lead to <b>pin 87</b> and hold the <b>HORN</b> button again.',chk:()=>mm('V')&&S.power&&leads(LP('K1','87'),'gnd')&&RT(PT('HORN')).pressed,ok:'Voltage on 87 means the contacts closed and fed the horn.'},
+  {enter:()=>plant('K1',{k:'stuckopen'}),t:'Now the horn is dead but you can hear the relay click. Check <b>pin 87</b> again while holding <b>HORN</b>.',chk:()=>mm('V')&&S.power&&leads(LP('K1','87'),'gnd')&&RT(PT('HORN')).pressed,ok:'0 V on 87, even though 30 has power and the coil clicks.'},
+  {t:'What is wrong?',q:['The coil is open','The contacts are not closing','The horn ground is bad'],a:1,ok:'The coil works (it clicks) and 30 has power, but 87 stays dead: burnt or stuck contacts. Replace the relay.'}]}
+];
+function lesDone(){try{return JSON.parse(localStorage.getItem(KEY+':school')||'{}');}catch(e){return{};}}
+function startLesson(id){const L=LES.find(l=>l.id===id);if(!L)return;if(S.job)endJob();loadExample(L.ex,true);
+  M.red=M.black=M.wire=M.tl=null;M.next='red';M.clip='gnd';PD=null;S.lesson={id,i:0,reads:[],msg:''};
+  const st=L.steps[0];if(st.enter)st.enter();sel=null;panelMode='auto';panelMin=false;save();renderPanel();syncHint();log(`Meter school: ${L.name}.`,'ok');}
+function curLesson(){return S.lesson&&LES.find(l=>l.id===S.lesson.id);}
+function readNow(){if(!M.on)return '';if(M.mode==='A'?!M.wire:!M.red)return '';const v=$('#mVal').textContent,u=$('#mUnit').textContent;return (v==='OL'||v==='----'?v:v+(u?' '+u:'')).trim();}
+function advance(){const L=curLesson(),s=S.lesson;if(!L)return;if(s.reads[s.i]==null)s.reads[s.i]=readNow();s.i++;s.msg='';sfx('click');
+  if(s.i>=L.steps.length){const d=lesDone();d[L.id]=1;try{localStorage.setItem(KEY+':school',JSON.stringify(d));}catch(e){}log(`Meter school: finished “${L.name}”.`,'ok');}
+  else{const st=L.steps[s.i];if(st.enter)st.enter();}save();if(!sel)renderPanel();}
+function lessonTick(){const L=curLesson();if(!L)return;const s=S.lesson;if(s.i>=L.steps.length)return;const st=L.steps[s.i];if(st.q||!st.chk)return;let ok=false;try{ok=st.chk();}catch(e){}if(ok)advance();}
+function answerQ(k){const L=curLesson();if(!L)return;const st=L.steps[S.lesson.i];if(!st||!st.q)return;if(k===st.a){S.lesson.reads[S.lesson.i]=st.q[k];advance();}else{S.lesson.msg='Not quite. Look at your readings again.';renderPanel();}}
+function skipStep(){const L=curLesson();if(!L)return;const st=L.steps[S.lesson.i];if(st&&st.q){S.lesson.reads[S.lesson.i]=st.q[st.a];}advance();}
+function quitLesson(silent){clearHF();for(const p of S.parts)p.pulled=false;S.lesson=null;save();if(!silent){panelMode='school';renderPanel();}syncHint();}
+function schoolHTML(){const d=lesDone(),n=LES.filter(l=>d[l.id]).length;
+  return `<div class="phead"><div class="ttl"><span class="tag">Meter school · ${n} of ${LES.length} done</span><h2>Meter tests</h2></div><button type="button" class="pbtn pclose" data-act="close" aria-label="Close">×</button></div>
+  <div class="pbody"><p class="note">Each lesson loads a circuit and tells you where to drag the leads. The step ticks off by itself when the leads are in the right place.</p><div class="exlist">${LES.map((l,i)=>`<button type="button" class="exb" data-act="lstart" data-id="${l.id}"><b>${d[l.id]?'✓ ':''}${i+1}. ${l.name}</b><span>${l.sub} · ${l.steps.length} steps</span></button>`).join('')}</div></div>`;}
+function lessonHTML(){const L=curLesson(),s=S.lesson;if(!L)return logHTML();const n=L.steps.length,done=s.i>=n,st=L.steps[Math.min(s.i,n-1)];
+  const past=L.steps.slice(0,s.i).map((x,i)=>`<li class="ok"><span>${x.q?'<b>'+esc(s.reads[i]||'')+'</b>':x.t}</span>${s.reads[i]&&!x.q?`<span class="rd">You read ${esc(s.reads[i])}</span>`:''}<span class="lok">${x.ok}</span></li>`).join('');
+  const cur=done?`<p class="cust">Lesson complete.</p>`:`<p class="cust">${st.t}</p>`;
+  const q=!done&&st.q?`<div class="exlist">${st.q.map((o,k)=>`<button type="button" class="exb" data-act="lq" data-k="${k}"><b>${esc(o)}</b></button>`).join('')}</div>${s.msg?`<p class="status">${esc(s.msg)}</p>`:''}`:'';
+  const minB=closeB.replace(/<button[^>]*data-act="close"[\s\S]*$/,'');
+  return `<div class="phead"><div class="ttl"><span class="tag">Meter school · ${esc(L.name)} · ${done?'done':'step '+(s.i+1)+' of '+n}</span>${cur}</div>${minB}</div>
+  <div class="pbody">${q}${done?`<div class="result"><span class="tag">Finished</span><b class="big">${esc(L.name)}</b><p>${L.steps[n-1].ok}</p></div>`:''}
+  ${past?`<ol class="tasks">${past}</ol>`:''}
+  <div class="acts">${done?'<button type="button" class="btn primary" data-act="lnext">Next lesson</button>':`<button type="button" class="btn" data-act="lskip">Skip step</button>`}<button type="button" class="btn" data-act="lrestart">Restart</button><button type="button" class="btn" data-act="lquit">All lessons</button></div></div>`;}
+
 /* ---------- loop ---------- */
 let last=performance.now(),liveT=0;
 function frame(t){const dt=Math.min(0.05,Math.max(0.001,(t-last)/1000));last=t;
   try{stepInt(dt);solve();heatTick(dt);stepParticles(dt);draw(dt);drawLeads();}catch(err){console.error(err);}
-  liveT+=dt;if(liveT>0.15){liveT=0;updateLive();updateMeter();}
+  liveT+=dt;if(liveT>0.15){liveT=0;updateLive();updateMeter();lessonTick();}
   requestAnimationFrame(frame);}
 
 /* ---------- boot ---------- */
