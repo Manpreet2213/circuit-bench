@@ -476,6 +476,7 @@ function gather(o){
   for(const p of S.parts){const n=NN.get(p.id),L=T[p.t].els(p,n,rtFor(p,o),o);if(p.hf)applyHF(p,L);for(const e of L){e.own=p;if(e.e===undefined)e.e=0;els.push(e);}}
   for(const w of S.wires){const n=NN.get(w.id);if(n[0]===n[1])continue;const R=AWG[w.g].r*Math.max(1,wlen(w))*CELL_M;
     const hf=w.hf,io=hf&&hf.k==='int'&&INT[w.id]&&INT[w.id].open;els.push({a:n[0],b:n[1],g:w.burnt||io||(hf&&hf.k==='open')?OFF:1/(Math.max(2e-5,R)+(hf&&hf.k==='hr'?hf.r:0)),e:0,k:'m',own:w});
+    if(hf&&hf.k==='touch'&&hf.to){const tw=S.wires.find(q=>q.id===hf.to);if(tw){const tn=NN.get(tw.id);if(tn)els.push({a:n[1],b:tn[1],g:1/Math.max(0.01,hf.r||0.05),e:0,k:'touch',own:w});}}
     if(hf&&hf.k==='chafe')els.push({a:n[1],b:-1,g:1/Math.max(0.005,hf.r||0.05),e:0,k:'chafe',own:w});
     if(hf&&hf.k==='stp'){const bp=mainBat();if(bp){const bn=NN.get(bp.id);if(bn)els.push({a:bn[0],b:n[1],g:1/Math.max(0.01,hf.r||0.1),e:0,k:'stp',own:w});}}}
   return els;
@@ -647,7 +648,7 @@ function redo(){if(jobLocked())return;if(hi<hist.length-1){hi++;restore(hist[hi]
 function syncUndo(){$('#bUndo').disabled=hi<=0||jobLocked();$('#bRedo').disabled=hi>=hist.length-1||jobLocked();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 function validState(o){return o&&Array.isArray(o.parts)&&Array.isArray(o.wires)&&o.parts.every(p=>T[p.t]&&isFinite(p.x)&&isFinite(p.y))&&o.wires.every(w=>AWG[w.g]&&isFinite(w.x1));}
-function loadState(o){S={parts:o.parts,wires:o.wires,seq:o.seq||1000,power:o.power!==false,job:o.job||null,sheet:o.sheet||null};
+function loadState(o){S={parts:o.parts,wires:o.wires,seq:o.seq||1000,power:o.power!==false,job:o.job||null,sheet:o.sheet||null,hideF:!!o.hideF,lesson:o.lesson||null};
   for(const p of S.parts){const d=T[p.t].def;for(const k in d)if(p[k]===undefined)p[k]=JSON.parse(JSON.stringify(d[k]));if(!p.label)p.label=nextLabel(p.t);p.r=(p.r|0)&3;}
   for(const w of S.wires){if(!w.label)w.label=nextWLabel();if(!WCOL[w.c])w.c='red';if(w.bend!=='v')w.bend='h';}
   const ids=[...S.parts,...S.wires].map(o=>+String(o.id).slice(1)||0);S.seq=Math.max(S.seq,...ids,0);}
@@ -995,6 +996,7 @@ function draw(dt){
     else if(hover){const h=snap(hover);cx.beginPath();cx.arc(h.x,h.y,0.24,0,Math.PI*2);cx.strokeStyle=C.accent;cx.lineWidth=0.06;cx.stroke();}}
   if(armed&&hover){const h=snap(hover);const g=Object.assign({id:'ghost',t:armed.t,x:h.x,y:h.y,r:0,label:''},JSON.parse(JSON.stringify(T[armed.t].def)),armed.props||{});cx._noText=true;drawPart(cx,g,{heat:0,I:0,V:0,P:0},0.5);cx._noText=false;}
   // probes
+  drawFaultMarks();
   if(M.wire&&M.on&&M.mode==='A'){const w=byId(M.wire);if(w){const m=along(wpath(w),wlen(w)/2);cx.save();cx.strokeStyle='#D9981F';cx.lineWidth=0.16;cx.beginPath();cx.ellipse(m.x,m.y,0.55,0.55,0,0.5,Math.PI*2-0.5);cx.stroke();cx.restore();}else M.wire=null;}
   // particles
   for(const q of parts_){const a=Math.max(0,q.life/q.max);if(q.k==='s'){cx.save();cx.globalAlpha=Math.min(1,a*1.6);cx.strokeStyle='#FFE7A0';cx.lineWidth=0.07;ln(cx,q.x,q.y,q.x-q.vx*0.035,q.y-q.vy*0.035);cx.restore();}
@@ -1007,6 +1009,9 @@ const activeProbes=()=>M.mode==='A'?['clamp']:['red','black'];
 function probeScreen(wh){const j=meterJacks();if(!j)return null;if(PD&&PD.which===wh)return{x:PD.x,y:PD.y};
   if(wh==='clamp'){const w=M.wire&&byId(M.wire);if(w)return w2s(along(wpath(w),wlen(w)/2));return{x:j.clamp.x,y:j.clamp.y+74};}
   const pt=M[wh];if(pt)return w2s(pt);return{x:j[wh].x+(wh==='red'?-10:10),y:j[wh].y+78};}
+function drawFaultMarks(){if(jobLocked()||S.hideF)return;for(const o of [...S.parts,...S.wires]){if(!o.hf)continue;const c=center(o);const x=c.x+0.55,y=c.y-0.85;
+  cx.save();cx.beginPath();cx.moveTo(x,y-0.32);cx.lineTo(x+0.3,y+0.2);cx.lineTo(x-0.3,y+0.2);cx.closePath();cx.fillStyle='#D7262B';cx.fill();cx.lineWidth=0.04;cx.strokeStyle='#FFFFFF';cx.stroke();cx.restore();txt(cx,'!',x,y+0.02,0.36,'#FFFFFF');
+  if(o.hf.k==='touch'&&o.hf.to){const tw=S.wires.find(q=>q.id===o.hf.to);if(tw){const a=center(o),b=center(tw);cx.save();cx.setLineDash([0.18,0.14]);cx.strokeStyle='#D7262B';cx.lineWidth=0.07;ln(cx,a.x,a.y,b.x,b.y);cx.restore();}}}}
 function drawLeads(){if(!M.on)return;const j=meterJacks();if(!j)return;cx.save();cx.setTransform(DPR,0,0,DPR,0,0);
   for(const wh of activeProbes()){const t=probeScreen(wh),sj=j[wh];if(!t)continue;const col=wh==='red'?'#D7262B':wh==='black'?'#1E2328':'#D9981F';
     const my=Math.max(sj.y,t.y)+55;cx.lineCap='round';cx.beginPath();cx.moveTo(sj.x,sj.y);cx.bezierCurveTo(sj.x,my,t.x,my,t.x,t.y-(wh==='clamp'?14:32));
@@ -1274,7 +1279,7 @@ function statusOf(p){if(p.blown)return 'Blown. Find the short before you replace
 const closeB=`<button type="button" class="pbtn pmin" data-act="min" aria-label="Collapse"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button><button type="button" class="pbtn pclose" data-act="close" aria-label="Close">×</button>`;
 function partHTML(p){const t=T[p.t],st=statusOf(p),dmg=p.blown||p.dmg;
   return `<div class="phead"><div class="ttl"><span class="tag">${t.name}${p.t==='relay'?` · ${p.pins}-pin`:''}</span><input class="lab" id="f_label" data-k="label" value="${esc(p.label)}" maxlength="12" aria-label="Label"></div><span class="livesum" id="livesum"></span>${closeB}</div>
-  <div class="pbody">${p.desc?`<p class="note"><b>${esc(p.desc)}</b></p>`:''}${st?`<p class="status">${st}</p>`:''}<dl class="live" id="live"></dl><div class="fields">${fields(p)}</div>
+  <div class="pbody">${p.desc?`<p class="note"><b>${esc(p.desc)}</b></p>`:''}${st?`<p class="status">${st}</p>`:''}<dl class="live" id="live"></dl><div class="fields">${fields(p)}</div>${jobLocked()?'':faultHTML(p)}
   <p class="note">${t.note}</p>
   <div class="acts">${dmg?'<button type="button" class="btn primary" data-act="replace">Replace part</button>':''}<button type="button" class="btn" data-act="rotate">Rotate</button><button type="button" class="btn" data-act="dup">Duplicate</button><button type="button" class="btn danger" data-act="del">Delete</button></div></div>`;}
 function wireHTML(w){const a=AWG[w.g],L=wlen(w)*CELL_M,R=a.r*Math.max(1,wlen(w))*CELL_M;
@@ -1283,7 +1288,7 @@ function wireHTML(w){const a=AWG[w.g],L=wlen(w)*CELL_M,R=a.r*Math.max(1,wlen(w))
   ${w.desc?`<p class="note"><b>${esc(w.desc)}</b></p>`:''}<dl class="live" id="live"></dl>
   <div class="fields">${F.sel('g','Gauge',w.g,GAUGES.map(g=>[g,`${g} AWG — good for ${AWG[g].amp} A`]))}
   <div class="f"><span>Colour</span><div class="swatches">${Object.entries(WCOL).map(([k,v])=>`<button type="button" class="sw" style="background:${v}" data-set="c" data-v="${k}" aria-pressed="${k===w.c}" aria-label="${k}"></button>`).join('')}</div></div>
-  ${F.seg('bend','Route',w.bend,[['h','Across first'],['v','Down first']])}</div>
+  ${F.seg('bend','Route',w.bend,[['h','Across first'],['v','Down first']])}</div>${jobLocked()?'':faultHTML(w)}
   <p class="note">Length ${L.toFixed(1)} m · ${(R*1000).toFixed(1)} mΩ. Thinner wire has more resistance and less ampacity. A wire carrying more than its rating heats up, smokes, then burns open.</p>
   <div class="acts">${w.burnt?'<button type="button" class="btn primary" data-act="replace">Replace wire</button>':''}<button type="button" class="btn danger" data-act="del">Delete</button></div></div>`;}
 function logHTML(){const items=LOG.slice(-60).reverse();
@@ -1298,7 +1303,9 @@ function logHTML(){const items=LOG.slice(-60).reverse();
    <li>Pinch or scroll to zoom. Drag empty board to pan. R rotates, Delete removes, Ctrl+Z undoes.</li></ul></div></div>`;}
 function fileHTML(){let js='';try{js=JSON.stringify(S);}catch(e){}
   return `<div class="phead"><div class="ttl"><span class="tag">Bench</span><h2>Circuits</h2></div><button type="button" class="pbtn pclose" data-act="close" aria-label="Close">×</button></div>
-  <div class="pbody"><div class="sect"><h3>Meter school</h3><p class="note">Short hands-on lessons for every meter test a tech uses: battery voltage, voltage to ground, voltage drop, ohms, amp clamp, parasitic draw, test light and relays.</p><div class="acts"><button type="button" class="btn primary" data-act="school">Open Meter school</button></div></div>
+  <div class="pbody"><div class="sect"><h3>Your faults</h3><p class="note">Tap any wire or part and use <b>Plant a fault</b> to add corrosion, a broken wire, a loose connection, a chafed wire touching the frame, wires touching each other, or a bad relay. ${(()=>{const n=[...S.parts,...S.wires].filter(o=>o.hf).length;return n?`There ${n===1?'is 1 fault':'are '+n+' faults'} on this board.`:'There are no faults on this board.';})()}</p>
+  <div class="acts"><button type="button" class="btn" data-act="fhide">${S.hideF?'Show fault markers':'Hide fault markers'}</button><button type="button" class="btn danger" data-act="fclear">Remove all faults</button></div><p class="note">Hide the markers, hand the phone to a friend to plant one, and then find it yourself.</p></div>
+  <div class="sect"><h3>Meter school</h3><p class="note">Short hands-on lessons for every meter test a tech uses: battery voltage, voltage to ground, voltage drop, ohms, amp clamp, parasitic draw, test light and relays.</p><div class="acts"><button type="button" class="btn primary" data-act="school">Open Meter school</button></div></div>
   <div class="sect"><h3>Work orders</h3><p class="note">A customer complaint with a hidden fault: an open wire, a corroded ground, a bad relay. The wiring is locked and live readings are hidden, so you find it with the meter and test light like on a real truck. Fewer tests means a higher score.</p><div class="acts"><button type="button" class="btn primary" data-act="jstart">Start a work order</button></div></div>
   <div class="sect"><h3>Volvo PC04 sheets</h3><p class="note">All ${SHEETS.length} sheets of the Volvo PC04 schematic laid out as live circuits. Fuses, connector pins, splices, relays and modules carry their names from the drawing. The layout is generated, so it reads top to bottom (power to ground) instead of matching the printed page.</p>
   <label class="f"><span>Sheet</span><select id="sheetPick">${SHEETS.map(sh=>`<option value="${sh.id}"${S.sheet===sh.id?' selected':''}>${sh.id} · p.${sh.pg} · ${esc(sh.t)}</option>`).join('')}</select></label>
@@ -1338,7 +1345,28 @@ function liveRows(o){const r=RT(o),rows=[];
   return rows;}
 function summary(o){const r=RT(o);if(o.t==='ecu')return r.awake?(r.prot?'OUT shut off':r.act?'OUT ON':'awake'):'asleep';if(o.t==='alt')return `${o.run?'RUN':'OFF'} · ${fA(r.out||0)}`;if(!o.t)return fA(r.I);if(o.t==='battery')return `${fV(r.V)} · ${fA(-r.I)}`;if(o.t==='relay')return r.en?'ON · '+fA(r.Ic):'OFF';if(o.t==='key')return o.pos;if(o.t==='ground')return fA(r.I);return `${fV(r.V)} · ${fA(r.I)}`;}
 function updateLive(){const o=selObj();if(!o||jobLocked())return;const l=$('#live');if(l)l.innerHTML=liveRows(o).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('');const s=$('#livesum');if(s)s.textContent=summary(o);}
+const FK={none:'No fault',open:'Broken / open',hr:'Corroded or loose terminal (high resistance)',int:'Loose connection (cuts in and out)',
+ chafe:'Chafed, touching the frame (short to ground)',stp:'Rubbed into a live wire (short to power)',touch:'Touching another wire',
+ coil:'Relay coil open',stuckopen:'Contacts not closing',welded:'Contacts welded shut'};
+function faultKinds(o){if(!o.t)return['none','open','hr','int','chafe','stp','touch'];
+  if(o.t==='relay')return['none','coil','stuckopen','welded'];if(o.t==='rcoil')return['none','open'];if(o.t==='rcont')return['none','open','hr','welded'];
+  if(['fuse','breaker','switch','button','lamp','led','diode','motor','horn','solenoid','heater','resistor','rheo','cpin','drv','mod','ground','canterm','ntc','pswitch','battery'].includes(o.t))return['none','open','hr','int'];
+  return null;}
+const FDEF={hr:0.5,chafe:0.05,stp:0.1,touch:0.05};
+function faultHTML(o){const ks=faultKinds(o);if(!ks)return '';const k=o.hf?o.hf.k:'none';
+  let h=`<div class="sect fsect"><h3>Plant a fault</h3>`+F.sel('fk','Fault',k,ks.map(x=>[x,x==='open'&&o.t==='ground'?'Ground open (loose stud, broken strap)':x==='hr'&&o.t==='ground'?'Corroded ground':x==='hr'&&o.t==='battery'?'Corroded battery post':FK[x]]));
+  if(k==='hr')h+=F.num('fr','Extra resistance',o.hf.r,0.05,0.01,100000,'Ω');
+  if(k==='chafe'||k==='stp'||k==='touch')h+=F.sel('fr','How hard it touches',String(o.hf.r),[['0.05','Dead short (bare copper)'],['1','Rubbing through (1 Ω)'],['10','Barely touching (10 Ω)']].map(([a,b])=>[a,b]));
+  if(k==='touch'){const others=S.wires.filter(w=>w!==o);h+=F.sel('fto','Touching which wire',o.hf.to||'',[['','Pick a wire…'],...others.map(w=>[w.id,`${w.label} · ${w.c} ${w.g} AWG`])]);}
+  const tip={none:'Make a real fault here, then find it with the meter.',open:'No current gets through. Voltage is there up to the break and gone after it.',hr:'Current still flows but the load is weak. Find it with a voltage drop test while the circuit is on.',
+    int:'It drops out by itself every few seconds. Watch the meter, or the load, while it happens.',chafe:'The wire touches the frame. Expect a blown fuse. Use a test light in the fuse socket to find it.',
+    stp:'The wire is fed from battery + through a rub. Loads can run with their switch off.',touch:'Two circuits are joined where the wires rub. One switch can work the other circuit, or a fuse blows.',
+    coil:'The relay never clicks.',stuckopen:'It clicks, but 87 stays dead.',welded:'The load stays on with the switch off.'}[k]||'';
+  return h+`<p class="note">${tip}</p></div>`;}
+function setFault(o,k,v){if(k==='fk'){if(v==='none'){delete o.hf;}else{const old=o.hf||{};o.hf={k:v,r:FDEF[v]!=null?(old.k===v?old.r:FDEF[v]):0,to:v==='touch'?(old.to||''):undefined};}if(INT[o.id])delete INT[o.id];return true;}
+  if(!o.hf)return false;if(k==='fr'){const r=parseFloat(v);if(isFinite(r)&&r>0)o.hf.r=r;return true;}if(k==='fto'){o.hf.to=v;return true;}return false;}
 function setProp(k,v,live){const o=selObj();if(!o)return false;
+  if(k==='fk'||k==='fr'||k==='fto'){if(jobLocked())return false;const ok=setFault(o,k,v);if(ok&&(k==='fk'))log(v==='none'?`Removed the fault on ${o.label}.`:`Planted a fault on ${o.label}: ${FK[v].toLowerCase()}.`,'warn');return ok;}
   if(jobLocked()&&!['on','pos','act','run','tc','pct','unplug','tlf'].includes(k))return false;
   if(k==='label'){v=String(v).trim().slice(0,12);if(!v)return false;o.label=v;return true;}
   if(k==='on'||k==='nc'||k==='act'||k==='run'||k==='led'||k==='unplug'||k==='tlf'||k==='pulled')v=v===true||v==='true';
@@ -1361,6 +1389,8 @@ panel.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)retu
     case 'del':delObj(o);break;
     case 'replace':if(o){o.blown=false;o.dmg=false;o.tripped=false;if(!o.t)o.burnt=false;RT(o).heat=0;RT(o).smk=false;commit();log(`Replaced ${o.label}.`,'ok');renderPanel();}break;
     case 'ex':loadExample(b.dataset.id);break;
+    case 'fhide':S.hideF=!S.hideF;save();renderPanel();break;
+    case 'fclear':for(const x of [...S.parts,...S.wires])delete x.hf;for(const k in INT)delete INT[k];commit();log('Removed all planted faults.','ok');renderPanel();break;
     case 'jstart':case 'jnext':startJob();break;
     case 'school':sel=null;panelMode='school';panelMin=false;renderPanel();break;
     case 'lstart':startLesson(b.dataset.id);break;
